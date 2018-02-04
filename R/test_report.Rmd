@@ -1,0 +1,57 @@
+---
+title: "test_report"
+output: html_document
+---
+<link rel="stylesheet" type="text/css" href="http://cdn.datatables.net/1.10.5/css/jquery.dataTables.min.css">
+<script src="http://code.jquery.com/jquery-2.1.2.min.js"></script>
+<script src="http://cdn.datatables.net/1.10.5/js/jquery.dataTables.min.js"></script>
+
+<script type="text/javascript">
+         $(document).ready(function() {
+             $("table").DataTable();
+         } );
+</script>
+## Test results
+
+```{r example_chunk, echo=FALSE, fig.width=15, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(drake)
+library(data.table)
+library(knitr)
+library(dplyr)
+library(rhandsontable)
+library(kableExtra)
+results <- readd(alltests)
+
+get_results <- function(x){
+  reptest <- data.frame(
+    testfile    = x$file,
+    context = x$context, 
+    time    = x$real, 
+    n_expect = length(x$results),
+    success = length(which(unlist(lapply(x[["results"]],
+                                         FUN = function(x) x[["message"]])) == "success")), 
+    failed = length(which(unlist(lapply(x[["results"]],
+                                        FUN = function(x) x[["message"]])) == "failed")), 
+    skipped = length(which(unlist(lapply(x[["results"]],
+                                         FUN = function(x) x[["message"]])) == "Unavailable")),
+    skipped = length(which(unlist(lapply(x[["results"]],
+                                         FUN = function(x) x[["message"]])) == "'Empty test'"))
+  )
+  reptest
+}
+res_raw <- data.table::rbindlist(lapply(results, FUN = function(x) get_results(x))) %>% 
+  group_by(testfile) %>% 
+  dplyr::mutate(time = sum(time)) %>% 
+  dplyr::summarize_all(first) %>% 
+  dplyr::mutate(perc = success / (n_expect - skipped)) %>% 
+  dplyr::mutate(
+    status = case_when(perc == 1  ~ cell_spec("ALL OK!", "html", color = "green", bold = T), 
+                       perc < 1 & perc != 0 ~ cell_spec("SOME FAILS!", "html", color = "orange", bold = T),
+                       perc == 0 ~ cell_spec("ALL FAILS!", "html", color = "red", bold = T))) %>% 
+  select(testfile, time, status) %>% 
+  arrange(-time)
+
+tbl <- res_raw %>% 
+  kable(results = "asis", escape = F)
+tbl
+```
